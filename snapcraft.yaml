@@ -1,0 +1,95 @@
+name: artisan
+version: 'v2.4.2'
+summary: artisan: visual scope for coffee roasters
+description: |
+  Artisan is a software that helps coffee roasters record, analyze, and control roast profiles. When used in conjunction with a thermocouple data logger or a proportional–integral–derivative controller (PID controller), this software can automate the creation of roasting metrics to help make decisions that influence the final coffee flavor.
+
+base: core20
+
+parts:
+  qt5:
+    source: https://github.com/ubuntu/snapcraft-desktop-helpers.git
+    source-subdir: qt
+    plugin: make
+    make-parameters: ["FLAVOR=qt5"]
+    build-packages:
+      - qtbase5-dev
+      - dpkg-dev
+    stage-packages:
+      - libxkbcommon0
+      - ttf-ubuntu-font-family
+      - dmz-cursor-theme
+      - light-themes
+      - adwaita-icon-theme
+      - gnome-themes-standard
+      - shared-mime-info
+      - libqt5gui5
+      - libgdk-pixbuf2.0-0
+      - libqt5svg5 # for loading icon themes which are svg
+      - try: [appmenu-qt5] # not available on core18
+      - locales-all
+
+  artisan:
+    plugin: dump
+    source: https://github.com/artisan-roaster-scope/artisan.git
+    build-packages:
+      - gcc-multilib
+      - xorg-dev
+      - ruby-dev
+      - build-essential
+      - p7zip-full
+      - rpm
+      - gdb
+      - libudev-dev
+      - qt5-default
+      - python3-pip
+      - python3-dev
+    override-build: |
+      cd src
+      pip3 install -r requirements.txt
+      pip3 install -r requirements-linux.txt
+      sed '/export PYTHON_PATH/d' build-linux.sh > build-snap.sh
+
+      chmod +x build-snap.sh
+      export PYTHON_PATH="/usr/local/lib/python3.8/dist-packages"
+
+      version=1.4.2
+
+      libinstall=/usr/lib
+      mkfile=x86_64_linux
+      os="unix"
+
+      # we use the -k option in the following as the SSL certificate on sourceforge does not validate
+      #curl -k -L -O https://kent.dl.sourceforge.net/project/snap7/${version}/snap7-full-${version}.7z
+      curl -k -L -O https://netcologne.dl.sourceforge.net/project/snap7/${version}/snap7-full-${version}.7z
+      7z x -bd snap7-full-${version}.7z
+      (cd snap7-full-${version}/build/${os} && make -f ${mkfile}.mk -j4 all && sudo make -f ${mkfile}.mk LibInstall=${libinstall} install)
+
+      ./build-snap.sh
+      snapcraftctl build
+    after:
+      - qt5
+
+plugs:
+  dbus-artisan:
+    bus: session
+    interface: dbus
+    name: snap.artisan.artisan
+  dbus-a11y:
+    bus: session
+    interface: dbus
+    name: org.a11y.Bus
+
+apps:
+  artisan:
+    command: bin/desktop-launch $SNAP/src/dist/artisan
+    plugs:
+      - x11
+      - home
+      - wayland
+      - desktop
+      - dbus-artisan
+      - dbus-a11y
+      - mount-observe
+      - desktop-legacy
+      - network-control
